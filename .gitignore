@@ -1,19 +1,71 @@
-# Virtual environment
-venv/
-env/
-.venv/
-
-# Python cache
+# ---------------------------
+# Python
+# ---------------------------
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pdb
+*.tmp
 
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Output and cache folders
+.cache/
+logs/
+temp/
+tmp/
+
+# ---------------------------
+# Data files (DO NOT UPLOAD)
+# ---------------------------
+*.csv
+*.tsv
+*.jsonl
+*.xlsx
+*.pickle
+*.pkl
+
+# GoEmotions dataset
+goemotions_*.csv
+Dataset/
+data/
+
+# ---------------------------
+# Models (VERY LARGE)
+# ---------------------------
 *.h5
 *.keras
-*.pkl
-*.json
-*.zip
+*.ckpt
+*.weights
 *.bin
-glove*
-*.npy
+*.pt
+models/
+saved_models/
+
+# GloVe and embeddings
+*.txt
+*.zip
+resources/glove/
+glove.6B*
+
+# Tokenizer + config
+tokenizer.pkl
+config.json
+
+# ---------------------------
+# VS Code
+# ---------------------------
+.vscode/
+
+# ---------------------------
+# OS Files
+# ---------------------------
+.DS_Store
+Thumbs.db

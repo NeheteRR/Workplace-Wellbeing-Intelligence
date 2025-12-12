@@ -1,0 +1,19 @@
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+*.h5
+*.keras
+*.pkl
+*.json
+*.zip
+*.bin
+glove*
+*.npy

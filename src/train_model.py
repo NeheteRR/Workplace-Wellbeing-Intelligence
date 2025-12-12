@@ -12,7 +12,7 @@ import pickle
 import json
 import tensorflow as tf
 
-df = pd.read_csv("data\\goemotions_bal_removing_stopwords.csv")
+df = pd.read_csv("C:\\Project\\data\\goemotions_bal_removing_stopwords.csv")
 
 texts = df["clean_text"].astype(str).tolist()
 
@@ -36,7 +36,7 @@ X_train, X_val, y_train, y_val = train_test_split(X, Y, test_size=0.2, random_st
 EMBEDDING_DIM = 100
 embeddings_index = {}
 
-with open("./glove.6B.100d.txt", encoding="utf8") as f:
+with open("C:\\Project\\resources\\glove\\glove.6B.100d.txt", encoding="utf8") as f:
     for line in f:
         values = line.split()
         word = values[0]
@@ -51,22 +51,24 @@ for w, i in tokenizer.word_index.items():
 
 embedding_layer = Embedding(
     VOCAB_SIZE, EMBEDDING_DIM, weights=[embedding_matrix],
-    input_length=MAX_LEN, trainable=True
+    trainable=True
 )
 
 
-# Attention Laye
 class AttentionLayer(Layer):
     def build(self, shape):
-        self.W = self.add_weight(name="att_weight", shape=(shape[-1],1),
+        self.W = self.add_weight(name="att_weight",
+                                 shape=(shape[-1], 1),
                                  initializer="normal")
-        self.b = self.add_weight(name="att_bias", shape=(shape[1],1),
+        self.b = self.add_weight(name="att_bias",
+                                 shape=(shape[1], 1),
                                  initializer="zeros")
+        super().build(shape)
+
     def call(self, x):
         e = tf.keras.backend.tanh(tf.keras.backend.dot(x, self.W) + self.b)
         a = tf.keras.backend.softmax(e, axis=1)
         return tf.keras.backend.sum(x * a, axis=1)
-
 
 # Model
 inp = Input(shape=(MAX_LEN,))
@@ -81,8 +83,9 @@ out = Dense(6, activation="sigmoid")(dense)
 model = Model(inp, out)
 model.compile(loss="binary_crossentropy", optimizer=Adam(1e-4), metrics=["accuracy"])
 
-checkpoint = ModelCheckpoint("./models/best_emotion_model.h5",
+checkpoint = ModelCheckpoint("./models/best_emotion_model.keras",
                              save_best_only=True, monitor="val_loss")
+
 early_stop = EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True)
 
 model.fit(X_train, y_train, validation_data=(X_val,y_val),
@@ -90,10 +93,10 @@ model.fit(X_train, y_train, validation_data=(X_val,y_val),
 
 
 # Save tokenizer + confi
-with open("./models/tokenizer.pkl", "wb") as f:
+with open("C:\\Project\\models\\tokenizer.pkl", "wb") as f:
     pickle.dump(tokenizer, f)
 
-with open("./models/config.json", "w") as f:
+with open("C:\\Project\\models\\config.json", "w") as f:
     json.dump({"max_len": MAX_LEN,
                "emotions": emotion_cols}, f)
 

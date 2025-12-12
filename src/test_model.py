@@ -10,10 +10,10 @@ from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag, word_tokenize
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-nltk.download("punkt")
-nltk.download("wordnet")
-nltk.download("averaged_perceptron_tagger")
-nltk.download("stopwords")
+# nltk.download("punkt")
+# nltk.download("wordnet")
+# nltk.download("averaged_perceptron_tagger")
+# nltk.download("stopwords")
 
 
 # Attention Layer
@@ -30,13 +30,14 @@ class AttentionLayer(tf.keras.layers.Layer):
 
 
 # Load model + tokenizer
-model = load_model("models\\best_emotion_model.h5",
-                   custom_objects={'AttentionLayer': AttentionLayer})
+model = load_model("C:\\Project\\models\\best_emotion_model.keras",
+                   custom_objects={"AttentionLayer": AttentionLayer})
 
-with open("models\\tokenizer.pkl","rb") as f:
+
+with open("C:\\Project\\models\\tokenizer.pkl","rb") as f:
     tokenizer = pickle.load(f)
 
-with open("models\\config.json","r") as f:
+with open("C:\\Project\\models\\config.json","r") as f:
     config = json.load(f)
 
 MAX_LEN = config["max_len"]

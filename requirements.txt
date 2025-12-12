@@ -1,18 +1,42 @@
 
-# core
-numpy==1.23.5
-pandas==1.5.3
-scikit-learn==1.2.2
-matplotlib==3.6.3
-seaborn==0.12.2
+# # core
+# numpy==1.23.5
+# pandas==1.5.3
+# scikit-learn==1.2.2
+# matplotlib==3.6.3
+# seaborn==0.12.2
 
-# NLP / preprocessing
-nltk==3.8.1
-contractions==0.1.73
-wordcloud==1.8.2.2
+# # NLP / preprocessing
+# nltk==3.8.1
+# contractions==0.1.73
+# wordcloud==1.8.2.2
 
-# Deep learning (TensorFlow compatible with Python 3.9)
-tensorflow==2.11.0
-h5py==3.7.0
+# # Deep learning (TensorFlow compatible with Python 3.9)
+# tensorflow==2.11.0
+# h5py==3.7.0
 
 
+# Core web + API
+fastapi
+uvicorn[standard]
+pydantic
+requests
+
+# Keras / TensorFlow (for your saved Keras model)
+tensorflow>=2.11.0
+
+# Chroma DB for storing metadata + sentence-transformer for optional embeddings
+chromadb
+sentence-transformers
+
+# Hugging Face transformers + torch for LLM-based recommendations (open-source model)
+transformers>=4.30.0
+torch
+
+# Streamlit for UI
+streamlit
+
+# Utilities
+numpy
+pandas
+python-dotenv

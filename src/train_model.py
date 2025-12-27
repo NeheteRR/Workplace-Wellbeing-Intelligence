@@ -12,7 +12,7 @@ import pickle
 import json
 import tensorflow as tf
 
-df = pd.read_csv("C:\\Project\\data\\goemotions_bal_removing_stopwords.csv")
+df = pd.read_csv("D:\\Projects_Final\\Sentiment_Analysis\\data\\goemotions_bal_removing_stopwords.csv")
 
 texts = df["clean_text"].astype(str).tolist()
 

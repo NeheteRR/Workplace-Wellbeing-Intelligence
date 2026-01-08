@@ -1,215 +1,173 @@
-from backend.services.predictor import Predictor
-from backend.services.wellbeing_trend_engine import BurnoutEngine
-from backend.services.llm_recommender import LLMRecommender
-from backend.services.db import JsonStore
-
 from fastapi import FastAPI, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import date
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import List, Union, Optional
 
+from backend.services.db import JsonStore
+from backend.services.predictor import Predictor
+from backend.services.wellbeing_trend_engine import BurnoutEngine
+from backend.services.llm_recommender import LLMRecommender
 
-# --------------------------------
-# App initialization
-# --------------------------------
+# =====================================================
+# App Init
+# =====================================================
 
-app = FastAPI(
-    title="Daily Emotion Tracker API",
-    description="Backend service for emotion analysis and wellbeing suggestions",
-    version="1.0.0"
-)
+app = FastAPI(title="Wellbeing API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --------------------------------
-# Services
-# --------------------------------
-
-BASE_DIR = Path(__file__).resolve().parent.parent  # SENTIMENT_ANALYSIS/
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 MODEL_PATH = BASE_DIR / "models" / "best_emotion_model.keras"
 TOKENIZER_PATH = BASE_DIR / "models" / "tokenizer.pkl"
 CONFIG_PATH = BASE_DIR / "models" / "config.json"
 
+store = JsonStore()
+
 predictor = Predictor(
-    model_path=MODEL_PATH,
-    tokenizer_path=TOKENIZER_PATH,
-    config_path=CONFIG_PATH
+    model_path=str(MODEL_PATH),
+    tokenizer_path=str(TOKENIZER_PATH),
+    config_path=str(CONFIG_PATH)
 )
 
-store = JsonStore()
-wellbeing_trend_engine = BurnoutEngine()
+engine = BurnoutEngine()
 llm = LLMRecommender()
 
-# --------------------------------
+# =====================================================
 # Schemas
-# --------------------------------
+# =====================================================
 
 class AnalyzeRequest(BaseModel):
-    user_id: Union[str, int]
+    org_id: str
+    employee_id: str
     text: str
-
-
-class Suggestion(BaseModel):
-    type: str
-    title: str
-    description: str
 
 
 class UserResponse(BaseModel):
     assistant_message: str
-    suggestions: List[Suggestion]
+    suggestions: List[dict]
 
 
 class OrgResponse(BaseModel):
-    user_id: Union[str, int]
+    employee_id: str
     wellbeing_status: str
-    burnout_score: float
+    wellbeing_score: float
     dominant_signals: List[str]
 
 
-# --------------------------------
-# API Endpoints
-# --------------------------------
-
-@app.get("/")
-def health_check():
-    return {"status": "API running successfully"}
-
+# =====================================================
+# Employee API
+# =====================================================
 
 @app.post("/analyze-day", response_model=Union[UserResponse, OrgResponse])
 def analyze_day(
     req: AnalyzeRequest,
-    x_source: Optional[str] = Header(default="user")  # "user" or "org"
+    x_source: Optional[str] = Header(default="user")
 ):
-    # -------------------------
-    # 1. Validation
-    # -------------------------
-    if not req.text or len(req.text.strip()) < 3:
-        raise HTTPException(
-            status_code=400,
-            detail="Text must contain at least 3 characters"
-        )
+    if len(req.text.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Text too short")
 
-    # -------------------------
-    # 2. Predict emotions
-    # -------------------------
+    # 1. Emotion prediction
     emotions, dominant_emotion = predictor.predict(req.text)
 
-    # -------------------------
-    # 3. Prepare today's record
-    # -------------------------
-    today_record = {
-        "user_id": req.user_id,
+    # 2. Load history
+    history = store.get_last_n(req.employee_id, 2)
+
+    today = {
+        "org_id": req.org_id,
+        "employee_id": req.employee_id,
         "date": date.today().isoformat(),
-        "text": req.text,
         "emotions": emotions
     }
 
-    # -------------------------
-    # 4. Load history (last 2 days)
-    # -------------------------
-    history = store.get_last_n(req.user_id, n=2)
-    full_window = history + [today_record]
+    full_window = history + [today]
 
-    # -------------------------
-    # 5. Burnout analysis (3-day window)
-    # -------------------------
-    burnout_score, wellbeing_status, dominant_signals = (
-        wellbeing_trend_engine.analyze_trend(full_window)
-    )
+    # 3. Trend analysis
+    score, status, signals = engine.analyze_trend(full_window)
 
-    allowed_categories = (
-        wellbeing_trend_engine.allowed_suggestion_categories(wellbeing_status)
-    )
+    today.update({
+        "wellbeing_score": score,
+        "wellbeing_status": status,
+        "dominant_signals": signals
+    })
 
-    today_record["burnout_score"] = burnout_score
-    today_record["wellbeing_status"] = wellbeing_status
+    store.add_record(today)
 
-    # Determine emotional pattern
-    if dominant_emotion in ["joy", "love"] and emotions.get(dominant_emotion, 0) > 0.4:
+    # =====================================================
+    # ✅ CORRECT emotional pattern logic (USED later)
+    # =====================================================
+
+    sadness = emotions.get("sadness", 0)
+    joy = emotions.get("joy", 0)
+    fear = emotions.get("fear", 0)
+    anger = emotions.get("anger", 0)
+
+    if joy >= 0.45:
         pattern = "positive"
-    elif wellbeing_status == "low":
-        pattern = "stable"
+    elif sadness + fear + anger >= 0.6:
+        pattern = "heavy"
     else:
-        pattern = "draining"
+        pattern = "neutral"
 
-    
+    # =====================================================
+    # USER RESPONSE
+    # =====================================================
+
+    if x_source == "user":
+        message = llm.generate_conversational_message({
+            "state": status,                 # internal
+            "dominant_emotion": dominant_emotion,
+            "pattern": pattern,              # ✅ FIXED
+            "trend": "stable"
+        })
+
+        suggestions = llm.generate_suggestions({
+            "wellbeing_status": status,
+            "signals": signals,
+            "allowed_categories": engine.allowed_suggestion_categories(status)
+        })
+
+        return UserResponse(
+            assistant_message=message,
+            suggestions=suggestions
+        )
+
+    # =====================================================
+    # ORG RESPONSE
+    # =====================================================
+
+    return OrgResponse(
+        employee_id=req.employee_id,
+        wellbeing_status=status,
+        wellbeing_score=score,
+        dominant_signals=signals
+    )
 
 
+# =====================================================
+# ORG DASHBOARD APIs
+# =====================================================
 
-    # -------------------------
-    # 6. Persist record
-    # -------------------------
-    store.add_record(today_record)
+@app.get("/org/summary")
+def org_summary(x_org_id: str = Header(...)):
+    records = store.get_records_by_org(x_org_id)
 
-    # -------------------------
-    # 7. Base (rule-based) message
-    # -------------------------
-    base_message = wellbeing_trend_engine.base_recommendation(wellbeing_status)
+    if not records:
+        return {"avg_score": 0, "overall_status": "no_data", "employee_count": 0}
 
-    # -------------------------
-    # 8. LLM suggestions (only if allowed)
-    # -------------------------
-    if allowed_categories:
-        llm_context = {
-            "wellbeing_status": wellbeing_status,
-            "signals": dominant_signals,
-            "allowed_categories": allowed_categories
-        }
-        suggestions = llm.generate_suggestions(llm_context)
-    else:
-        suggestions = []
+    scores = [r["wellbeing_score"] for r in records]
+    avg = sum(scores) / len(scores)
 
-    # Trend awareness
-    if len(full_window) >= 2:
-        prev = full_window[-2]["emotions"]
-        curr = emotions
+    status = (
+        "healthy" if avg < 0.3 else
+        "watch" if avg < 0.55 else
+        "elevated"
+    )
 
-        if curr.get("joy", 0) > prev.get("joy", 0):
-            trend = "improving"
-        elif curr.get("sadness", 0) > prev.get("sadness", 0):
-            trend = "declining"
-        else:
-            trend = "stable"
-    else:
-        trend = "unknown"
-
-    chat_context = {
-    "state": wellbeing_status,              # internal only
-    "dominant_emotion": dominant_emotion,
-    "pattern": pattern
+    return {
+        "avg_score": round(avg, 2),
+        "overall_status": status,
+        "employee_count": len(set(r["employee_id"] for r in records))
     }
 
-    
-    chat_context["trend"] = trend
 
 
-
-    assistant_message = llm.generate_conversational_message(chat_context)
-
-    # -------------------------
-    # 9. RESPONSE SPLIT
-    # -------------------------
-    if x_source.lower() == "user":
-        return UserResponse(
-        assistant_message=assistant_message,
-        suggestions=suggestions
-        )
-
-
-    else:  # org / analytics
-        return OrgResponse(
-            user_id=req.user_id,
-            wellbeing_status=wellbeing_status,
-            burnout_score=burnout_score,
-            dominant_signals=dominant_signals
-        )

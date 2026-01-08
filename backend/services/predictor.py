@@ -1,62 +1,112 @@
-# backend/services/predictor.py
-
 import os
+import json
+import pickle
+import re
+import contractions
 import numpy as np
+import tensorflow as tf
+
+from typing import Dict, Tuple
 from tensorflow.keras.models import load_model
-from typing import Dict
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
 import nltk
 from nltk.corpus import wordnet, stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag, word_tokenize
-import re
-import contractions
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-# Download required NLTK resources
+
+# -------------------------------------------------
+# NLTK setup (run once)
+# -------------------------------------------------
 nltk.download("punkt")
 nltk.download("wordnet")
 nltk.download("averaged_perceptron_tagger")
 nltk.download("stopwords")
 
 
+# -------------------------------------------------
+# Attention Layer (needed for model loading)
+# -------------------------------------------------
+class AttentionLayer(tf.keras.layers.Layer):
+    def build(self, shape):
+        self.W = self.add_weight(
+            name="att_weight",
+            shape=(shape[-1], 1),
+            initializer="normal"
+        )
+        self.b = self.add_weight(
+            name="att_bias",
+            shape=(shape[1], 1),
+            initializer="zeros"
+        )
+        super().build(shape)
+
+    def call(self, x):
+        e = tf.keras.backend.tanh(tf.keras.backend.dot(x, self.W) + self.b)
+        a = tf.keras.backend.softmax(e, axis=1)
+        return tf.keras.backend.sum(x * a, axis=1)
+
+
+# -------------------------------------------------
+# Predictor
+# -------------------------------------------------
 class Predictor:
     """
-    Loads Keras model (.keras) and performs preprocessing + probability prediction.
+    Loads trained emotion model and predicts emotion probabilities.
     """
 
-    def __init__(self, model_path: str):
+    def __init__(
+        self,
+        model_path: str,
+        tokenizer_path: str,
+        config_path: str
+    ):
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model not found at {model_path}")
+            raise FileNotFoundError(f"Model not found: {model_path}")
+        if not os.path.exists(tokenizer_path):
+            raise FileNotFoundError(f"Tokenizer not found: {tokenizer_path}")
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Config not found: {config_path}")
 
-        self.model = load_model(model_path, compile=False)
+        # Load model
+        self.model = load_model(
+            model_path,
+            custom_objects={"AttentionLayer": AttentionLayer},
+            compile=False
+        )
 
-        # emotion labels in output order
-        self.labels = ['sadness', 'love', 'joy', 'anger', 'fear', 'neutral']
+        # Load tokenizer
+        with open(tokenizer_path, "rb") as f:
+            self.tokenizer = pickle.load(f)
 
-        # tokenizer not used since you used text preprocessing
-        self.max_len = 128
+        # Load config
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
 
-        # Stopwords
+        self.max_len = cfg["max_len"]
+        self.emotions = cfg["emotions"]
+
+        # Stopwords (same logic as training)
         combined = set(ENGLISH_STOP_WORDS).union(set(stopwords.words("english")))
-        keep_words = {'not', 'no', 'nor', 'never', 'cannot', 'but', 'without', 'against', 'cry', 'very', 'many', 'almost'}
-        self.final_stopwords = combined - keep_words
+        keep = {'not','no','nor','never','cannot','but','against','without','cry','very','many'}
+        self.stopwords = combined - keep
 
-        # lemmatizer
         self.lemmatizer = WordNetLemmatizer()
 
-    # -------------------------
-    # PREPROCESSING PIPELINE
-    # -------------------------
+    # -------------------------------------------------
+    # Preprocessing (MUST match training)
+    # -------------------------------------------------
 
     def _clean_text(self, text: str) -> str:
         text = text.lower()
         text = re.sub(r'@\w+', '', text)
-        text = text.replace('#', '')
+        text = text.replace("#", "")
         text = re.sub(r'http\S+|www\S+', '', text)
         text = contractions.fix(text)
         text = re.sub(r'[^a-z\s]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text
+        return re.sub(r'\s+', ' ', text).strip()
 
     def _get_wordnet_pos(self, tag):
         if tag.startswith("J"):
@@ -72,42 +122,37 @@ class Predictor:
     def _lemmatize(self, text: str) -> str:
         tokens = word_tokenize(text)
         tagged = pos_tag(tokens)
-        return " ".join(self.lemmatizer.lemmatize(w, self._get_wordnet_pos(t)) for w, t in tagged)
+        return " ".join(
+            self.lemmatizer.lemmatize(w, self._get_wordnet_pos(t))
+            for w, t in tagged
+        )
 
     def _remove_stopwords(self, text: str) -> str:
-        return " ".join([t for t in text.split() if t not in self.final_stopwords])
+        return " ".join(t for t in text.split() if t not in self.stopwords)
 
-    def _preprocess(self, text: str) -> str:
+    def preprocess(self, text: str) -> str:
         text = self._clean_text(text)
         text = self._lemmatize(text)
         text = self._remove_stopwords(text)
         return text
 
-    # -------------------------
-    # PREDICTION
-    # -------------------------
+    # -------------------------------------------------
+    # Prediction
+    # -------------------------------------------------
 
-    def predict(self, text: str) -> Dict[str, float]:
-        txt = self._preprocess(text)
+    def predict(self, text: str) -> Tuple[Dict[str, float], str]:
+        clean = self.preprocess(text)
 
-        try:
-            # If model uses TextVectorization internally
-            inputs = np.array([txt], dtype=object)
-            raw_out = self.model.predict(inputs)
-        except Exception:
-            # Fallback
-            dummy = np.zeros((1, self.max_len))
-            raw_out = self.model.predict(dummy)
+        seq = self.tokenizer.texts_to_sequences([clean])
+        padded = pad_sequences(seq, maxlen=self.max_len, padding="post")
 
-        # Ensure shape match
-        probs = np.asarray(raw_out).reshape(-1)
+        probs = self.model.predict(padded)[0]
 
-        if len(probs) != len(self.labels):
-            temp = np.zeros(len(self.labels))
-            for i in range(min(len(temp), len(probs))):
-                temp[i] = probs[i]
-            probs = temp
+        prob_dict = {
+            self.emotions[i]: float(probs[i])
+            for i in range(len(self.emotions))
+        }
 
-        probs = np.clip(probs, 0.0, 1.0).tolist()
+        top_emotion = self.emotions[int(np.argmax(probs))]
 
-        return {label: float(p) for label, p in zip(self.labels, probs)}
+        return prob_dict, top_emotion

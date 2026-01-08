@@ -1,49 +1,164 @@
-# backend/services/llm_recommender.py
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
-from typing import Dict
-import threading
+import os
+import json
+from typing import List, Dict
+from dotenv import load_dotenv
+from google import genai
+
+load_dotenv()
+
 
 class LLMRecommender:
     """
-    Uses an open-source seq2seq LLM (Flan-T5) to produce an enhanced recommendation sentence.
-    We keep this lightweight: flan-t5-small is recommended.
+    LLM layer responsible ONLY for language generation.
+    It must NEVER break the core application flow.
     """
 
-    def __init__(self, model_name: str = "google/flan-t5-small"):
-        # Load tokenizer + model and create a text2text-generation pipeline
+    def __init__(self, model_name: str = "gemini-1.5-flash"):
+        self.api_key = os.getenv("GEMINI_API_KEY")
+
+        if not self.api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not set. Please define it as an environment variable."
+            )
+
+        self.client = genai.Client(api_key=self.api_key)
         self.model_name = model_name
+
+    # =====================================================
+    # LOW-LEVEL LLM CALL (SAFE)
+    # =====================================================
+
+    def _generate(self, prompt: str) -> str:
+        """
+        Calls Gemini safely.
+        Raises NO exceptions upward.
+        """
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-            self.pipe = pipeline("text2text-generation", model=self.model, tokenizer=self.tokenizer, device=-1)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+            return response.text.strip() if response.text else ""
         except Exception as e:
-            # if loading fails, create a fallback that returns the base message
-            self.pipe = None
+            print("LLM generation failed:", e)
+            return ""
 
-    def _build_prompt(self, text: str, emotions: Dict[str, float], base_message: str) -> str:
-        # Build a short prompt including the detected emotions and base message.
-        # Keep prompt short for speed.
-        top_em = sorted(emotions.items(), key=lambda x: x[1], reverse=True)[:3]
-        em_str = ", ".join([f"{k}:{v:.2f}" for k, v in top_em if v > 0.05]) or "none"
-        prompt = (
-            f"User journal: \"{text}\"\n"
-            f"Detected emotions: {em_str}\n"
-            f"Base suggestion: {base_message}\n\n"
-            "Provide a single concise empathetic recommendation (2-3 sentences). Avoid medical claims.\n"
-            "Be friendly, practical, and short."
+    # =====================================================
+    # CONVERSATIONAL USER MESSAGE
+    # =====================================================
+
+    def generate_conversational_message(self, context: dict) -> str:
+        """
+        Generates a natural, conversational assistant message.
+        Never mentions burnout, scores, or diagnosis.
+        """
+
+        prompt = f"""
+You are a friendly wellbeing assistant.
+
+Context:
+- Emotional pattern: {context.get('pattern')}
+- Dominant emotion: {context.get('dominant_emotion')}
+- Emotional trend: {context.get('trend')}
+
+Rules:
+1. Do NOT mention burnout, risk, scores, or diagnosis.
+2. Use warm, natural, human language.
+3. Keep it to 1–2 short sentences.
+4. Reinforce positive days.
+5. Gently acknowledge heavy days.
+6. Do NOT give advice unless very soft and optional.
+
+Task:
+Write a conversational response to the user.
+"""
+
+        response = self._generate(prompt)
+
+        if response:
+            return response
+
+        # 🔐 SAFE FALLBACK
+        return self._fallback_conversational_message(context)
+
+    def _fallback_conversational_message(self, context: dict) -> str:
+        """
+        Deterministic fallback to ensure no 500 errors.
+        """
+        pattern = context.get("pattern")
+        trend = context.get("trend")
+
+        if pattern == "positive":
+            return (
+                "That sounds like a really positive day. "
+                "It’s great that you’re feeling good — enjoy those moments."
+            )
+
+        if trend == "declining":
+            return (
+                "It sounds like the last few days have been a bit heavy. "
+                "Thanks for taking a moment to reflect and share."
+            )
+
+        return (
+            "Thanks for sharing how your day went. "
+            "Taking time to check in with yourself like this really matters."
         )
-        return prompt
 
-    def enhance_recommendation(self, text: str, emotions: Dict[str, float], base_message: str) -> str:
-        if not self.pipe:
-            return base_message  # fallback
+    # =====================================================
+    # STRUCTURED SUGGESTIONS (LLM)
+    # =====================================================
 
-        prompt = self._build_prompt(text, emotions, base_message)
+    def generate_suggestions(self, context: dict) -> List[Dict]:
+        """
+        Uses Gemini to generate structured, non-medical suggestions.
+        Returns [] on failure (never crashes).
+        """
+
+        prompt = f"""
+You are a wellbeing assistant.
+
+Context:
+- Internal state: {context['wellbeing_status']}
+- Detected signals: {context['signals']}
+- Allowed categories: {context['allowed_categories']}
+
+Rules:
+1. Do NOT provide medical advice.
+2. Do NOT diagnose.
+3. Suggestions must be optional, everyday actions.
+4. Use ONLY these categories: {context['allowed_categories']}
+
+Task:
+Generate 2–3 suggestions in JSON format.
+
+Each item must contain:
+- type
+- title
+- description
+
+Return ONLY valid JSON.
+"""
+
+        raw = self._generate(prompt)
+
         try:
-            # Generate with small beam or sampling; short output expected
-            out = self.pipe(prompt, max_length=120, do_sample=False, num_beams=2)
-            if out and isinstance(out, list):
-                return out[0].get("generated_text", base_message)
-            return base_message
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
         except Exception:
-            return base_message
+            return []
+
+    # =====================================================
+    # LEGACY SUPPORT (OPTIONAL)
+    # =====================================================
+
+    def recommend(
+        self,
+        history: List[Dict],
+        wellbeing_status: str,
+        base_message: str
+    ) -> str:
+        """
+        Legacy method retained for backward compatibility.
+        """
+        return base_message

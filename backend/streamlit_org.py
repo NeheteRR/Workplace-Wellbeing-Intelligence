@@ -1,11 +1,9 @@
 # streamlit_org.py
+# streamlit run streamlit_org.py --server.port 8004
 
 import streamlit as st
 import requests
 
-# ---------------------------------
-# Page config
-# ---------------------------------
 st.set_page_config(
     page_title="Organization Wellbeing Dashboard",
     page_icon="📊",
@@ -21,9 +19,6 @@ HEADERS = {
     "X-Org-Id": ORG_ID
 }
 
-# ---------------------------------
-# Overall Wellbeing Summary
-# ---------------------------------
 st.subheader("Overall Wellbeing")
 
 try:
@@ -37,28 +32,12 @@ try:
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric(
-        label="Average Wellbeing Score",
-        value=summary.get("avg_score", 0)
-    )
-
-    col2.metric(
-        label="Overall Status",
-        value=summary.get("overall_status", "N/A").upper()
-    )
-
-    col3.metric(
-        label="Employees Tracked",
-        value=summary.get("employee_count", 0)
-    )
+    col1.metric("Average Wellbeing Score", summary["avg_score"])
+    col2.metric("Overall Status", summary["overall_status"].upper())
+    col3.metric("Employees Tracked", summary["employee_count"])
 
 except Exception as e:
     st.error("Unable to load organization summary")
 
-# ---------------------------------
-# Placeholder for future expansion
-# ---------------------------------
 st.divider()
-st.info(
-    "👥 Employee-level insights will appear here once aggregation is finalized."
-)
+st.info("👥 Employee-level insights will appear here once aggregation is finalized.")

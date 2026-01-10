@@ -54,12 +54,10 @@ class JsonStore:
         filtered.sort(key=lambda x: x.get("date", ""), reverse=True)
         return filtered[:n]
 
-    def get_records_by_org(self, org_id: str) -> List[Dict]:
+    def get_records_by_org(self, org_id: str):
         data = self._load_all()
-
         return [
             r for r in data
-            if r.get("org_id") == org_id
-            and "employee_id" in r
-            and "wellbeing_score" in r
+            if r.get("org_id") == org_id and "wellbeing_score" in r
         ]
+

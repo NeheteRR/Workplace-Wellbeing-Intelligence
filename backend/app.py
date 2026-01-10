@@ -1,3 +1,6 @@
+# backend/app.py
+# uvicorn backend.app:app --reload
+
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 from datetime import date
@@ -53,7 +56,6 @@ class OrgResponse(BaseModel):
     wellbeing_score: float
     dominant_signals: List[str]
 
-
 # =====================================================
 # Employee API
 # =====================================================
@@ -66,10 +68,7 @@ def analyze_day(
     if len(req.text.strip()) < 3:
         raise HTTPException(status_code=400, detail="Text too short")
 
-    # 1. Emotion prediction
     emotions, dominant_emotion = predictor.predict(req.text)
-
-    # 2. Load history
     history = store.get_last_n(req.employee_id, 2)
 
     today = {
@@ -80,8 +79,6 @@ def analyze_day(
     }
 
     full_window = history + [today]
-
-    # 3. Trend analysis
     score, status, signals = engine.analyze_trend(full_window)
 
     today.update({
@@ -92,14 +89,11 @@ def analyze_day(
 
     store.add_record(today)
 
-    # =====================================================
-    # ✅ CORRECT emotional pattern logic (USED later)
-    # =====================================================
-
+    # ---- FIXED emotional pattern logic ----
     sadness = emotions.get("sadness", 0)
-    joy = emotions.get("joy", 0)
     fear = emotions.get("fear", 0)
     anger = emotions.get("anger", 0)
+    joy = emotions.get("joy", 0)
 
     if joy >= 0.45:
         pattern = "positive"
@@ -108,15 +102,11 @@ def analyze_day(
     else:
         pattern = "neutral"
 
-    # =====================================================
-    # USER RESPONSE
-    # =====================================================
-
     if x_source == "user":
         message = llm.generate_conversational_message({
-            "state": status,                 # internal
+            "state": status,              # internal only
             "dominant_emotion": dominant_emotion,
-            "pattern": pattern,              # ✅ FIXED
+            "pattern": pattern,
             "trend": "stable"
         })
 
@@ -131,17 +121,12 @@ def analyze_day(
             suggestions=suggestions
         )
 
-    # =====================================================
-    # ORG RESPONSE
-    # =====================================================
-
     return OrgResponse(
         employee_id=req.employee_id,
         wellbeing_status=status,
         wellbeing_score=score,
         dominant_signals=signals
     )
-
 
 # =====================================================
 # ORG DASHBOARD APIs
@@ -152,22 +137,24 @@ def org_summary(x_org_id: str = Header(...)):
     records = store.get_records_by_org(x_org_id)
 
     if not records:
-        return {"avg_score": 0, "overall_status": "no_data", "employee_count": 0}
+        return {
+            "avg_score": 0,
+            "overall_status": "no_data",
+            "employee_count": 0
+        }
 
     scores = [r["wellbeing_score"] for r in records]
     avg = sum(scores) / len(scores)
 
-    status = (
-        "healthy" if avg < 0.3 else
-        "watch" if avg < 0.55 else
-        "elevated"
-    )
+    if avg < 0.3:
+        status = "healthy"
+    elif avg < 0.55:
+        status = "watch"
+    else:
+        status = "elevated"
 
     return {
         "avg_score": round(avg, 2),
         "overall_status": status,
-        "employee_count": len(set(r["employee_id"] for r in records))
+        "employee_count": len({r["employee_id"] for r in records})
     }
-
-
-

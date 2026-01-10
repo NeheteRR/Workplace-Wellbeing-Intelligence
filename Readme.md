@@ -146,7 +146,6 @@ SENTIMENT_ANALYSIS/
 - Attention helps focus on emotionally relevant words
 - Sigmoid allows multi-emotion probability output
 
----
 
 ## 🏋️ Model Training
 
@@ -201,8 +200,7 @@ SENTIMENT_ANALYSIS/
 
 ### Backend
 ```bash
-cd backend
-uvicorn app:app --reload
+uvicorn backend.app:app --reload
 ```
 
 Employee App

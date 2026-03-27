@@ -63,6 +63,7 @@ config.json
 # VS Code
 # ---------------------------
 .vscode/
+analysis_results.md
 
 # ---------------------------
 # OS Files

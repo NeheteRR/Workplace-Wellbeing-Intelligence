@@ -7,7 +7,7 @@ class BurnoutEngine:
     """
 
     # Emotion thresholds
-    EMOTION_THRESHOLD = 0.45
+    EMOTION_THRESHOLD = 0.35
 
     def is_burnout_signal_day(self, emotions: Dict[str, float]) -> bool:
         """
@@ -29,14 +29,15 @@ class BurnoutEngine:
         anger = emotions.get("anger", 0)
         fear = emotions.get("fear", 0)
 
+        # Increase weights and add a baseline for negative emotions
         base_score = (
-            0.45 * sadness +
-            0.30 * anger +
-            0.25 * fear
+            0.50 * sadness +
+            0.40 * anger +
+            0.40 * fear
         )
 
-        # Increase score if pattern persists
-        score = base_score * (1 + 0.15 * max(0, persistence_days - 1))
+        # Increase score significantly if pattern persists
+        score = base_score * (1 + 0.3 * max(0, persistence_days - 1))
         return min(1.0, score)
     
     def analyze_trend(self, history: List[Dict]):
@@ -66,14 +67,15 @@ class BurnoutEngine:
 
         # ✅ Always compute base burnout score
         burnout_score = self.compute_burnout_score(avg_emotions, signal_days)
+        wellbeing_score = round(1.0 - burnout_score, 2)
 
         # ✅ History-aware interpretation
-        if len(history) < 3:
-            wellbeing_status = "low"   # not enough evidence yet
+        if len(history) == 0:
+            wellbeing_status = "unknown"
         else:
-            if burnout_score < 0.4:
+            if wellbeing_score < 0.4:
                 wellbeing_status = "low"
-            elif burnout_score < 0.65:
+            elif wellbeing_score < 0.7:
                 wellbeing_status = "moderate"
             else:
                 wellbeing_status = "high"
@@ -83,7 +85,7 @@ class BurnoutEngine:
             if k in ["sadness", "anger", "fear"] and v > self.EMOTION_THRESHOLD
         ]
 
-        return burnout_score, wellbeing_status, dominant_signals
+        return wellbeing_score, wellbeing_status, dominant_signals
 
 
     def base_recommendation(self, wellbeing_status: str) -> str:

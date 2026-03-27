@@ -1,245 +1,119 @@
-# Sentiment Analysis & Wellbeing Monitoring System
+# 🧠 Workplace Wellbeing Intelligence
+### Sentiment Analysis & Employee Feedback Monitoring System
 
 ## 📌 Project Overview
 
-This project was built with the primary objective of **designing and training a deep learning–based emotion recognition model from scratch** using the **GoEmotions dataset (Hugging Face)** and then **applying the trained model to a real-world wellbeing and burnout monitoring use case**.
+This system is an AI-driven platform designed to monitor organizational wellbeing while maintaining employee privacy. It leverages a **custom-trained deep learning model** (BiLSTM + Attention) trained on the **GoEmotions dataset** to provide real-world insights into burnout and sentiment trends.
 
-The work is divided into two clear phases:
+The platform provides a dual-interface experience:
+1.  **Employee Dashboard**: Daily emotional check-ins, personal wellbeing tracking, and AI-driven growth suggestions.
+2.  **HR Intelligence Dashboard**: Anonymized, aggregated data for organizational health monitoring and early risk signal detection.
 
-1. **Emotion Model Development**
-   - Dataset preprocessing and balancing
-   - Custom deep learning architecture design
-   - Model training using pretrained word embeddings
-2. **Applied Use Case**
-   - Daily employee wellbeing check-ins
-   - Burnout trend detection
-   - Organization-level wellbeing aggregation
+---
 
-This project emphasizes **practical deep learning concepts**, **clean preprocessing pipelines**, and **ethical application of sentiment analysis**.
+## 🛠️ Technology Stack
 
+### **Backend (API & AI)**
+- **FastAPI**: High-performance Python web framework.
+- **TensorFlow/Keras**: Deep learning engine for emotion classification.
+- **JWT (PyJWT)**: Secure, stateless authentication and RBAC.
+- **JsonStore**: Lightweight persistence layer for sentiment logs.
 
-## 🎯 Objectives
+### **Frontend (Next.js Application)**
+- **Next.js 15 (App Router)**: Modern React framework for the dashboard UI.
+- **Tailwind CSS & Shadcn/UI**: Premium, responsive UI components.
+- **Lucide Icons**: Consistent, high-quality iconography.
+- **Recharts**: Interactive data visualizations for wellbeing trends.
 
-- Build an **emotion classification model from scratch**
-- Use **GoEmotions dataset** and reduce it to meaningful emotion groups
-- Apply **advanced NLP techniques**:
-  - Tokenization
-  - Padding
-  - GloVe embeddings
-  - BiLSTM + Attention
-- Design an **end-to-end system**:
-  - Model → API → User UI → Organization Dashboard
+---
 
+## 🏗️ Project Architecture
 
-
-## 🧠 Emotion Categories Used
-
-From the original GoEmotions labels, emotions were merged into **6 final categories**:
-
-- Sadness  
-- Love  
-- Joy  
-- Anger  
-- Fear  
-- Neutral  
-
-This reduction was done to improve interpretability and practical applicability.
-
-
-## 🗂️ Project Structure
 ```text
 SENTIMENT_ANALYSIS/
-│
-├── backend/
-│ ├── app.py # FastAPI backend
-│ ├── seed_dummy_data.py
-│ ├── streamlit_app.py
-│ ├── streamlit_employee.py
-│ ├── streamlit_org.py
-│ │
-│ ├── services/
-│ │ ├── db.py # JSON-based storage
-│ │ ├── predictor.py # Model inference logic
-│ │ ├── llm_recommender.py # Response generation
-│ │ ├── wellbeing_trend_engine.py
-│ │ ├── schemas.py
-│ │ └── init.py
-│ │
-│ └── data/
-│ └── emotion_logs.json
-│
-├── data/
-│ ├── emotion_logs.json
-│ ├── goemotions_bal_removing_stopwords.csv
-│ └── raw/
-│ ├── goemotions_1.csv
-│ ├── goemotions_2.csv
-│ └── goemotions_3.csv
-│
-├── models/
-│ ├── best_emotion_model.keras
-│ ├── best_emotion_model.h5
-│ ├── tokenizer.pkl
-│ └── config.json
-│
-├── resources/
-│ └── glove/
-│ └── glove.6B.100d.txt
-│
-├── src/
-│ ├── train_model.py
-│ ├── text_preprocessing.py
-│ └── data_preprocessing.py
-│
-├── utils/
-│ ├── attention.py
-│ └── preprocess_pipeline.py
-│
-├── .env
-├── venv/
-└── README.md
+├── backend/                # FastAPI Application
+│   ├── app.py              # Main API entry point (JWT, Routes)
+│   ├── services/           # Business Logic
+│   │   ├── predictor.py    # DL Model Inference
+│   │   ├── db.py           # JSON Data Management
+│   │   ├── wellbeing_trend_engine.py  # Burnout Detection Logic
+│   │   └── llm_recommender.py # Conversational AI Responses
+│   └── data/               # Persistent Storage (JSON)
+├── frontend/               # Next.js Application
+│   ├── src/app/            # App Router (Employee & HR routes)
+│   ├── src/components/     # Reusable UI Components
+│   └── src/lib/            # API Client & Utilities
+├── models/                 # ML Artifacts (Keras models, Tokenizers)
+├── src/                    # ML Training Pipeline
+├── resources/              # Pretrained Embeddings (GloVe)
+└── utils/                  # NLP Preprocessing Utilities
 ```
 
+---
 
-## 🔄 Data Preprocessing Pipeline
+## 🚀 Key Features
 
-### Steps Performed
+### 👤 Employee Experience
+- **Daily Check-ins**: Express how you feel through text. The AI analyzes sentiment in real-time.
+- **AI Growth Suggestions**: Receive tailored advice based on your current emotional state.
+- **Wellbeing History**: Track your progress over time with interactive charts.
+- **Privacy First**: Raw text is never shared with management; only aggregated scores are reported.
 
-1. **Merge GoEmotions files**
-   - `goemotions_1.csv`
-   - `goemotions_2.csv`
-   - `goemotions_3.csv`
+### 📊 HR & Organizational Intelligence
+- **Aggregation Engine**: Automatic calculation of department and organization-level wellbeing scores.
+- **Risk Signal Table**: Identify departments or trends that may indicate high burnout risk without compromising individual anonymity.
+- **Sentiment Distribution**: Visualize the emotional health of the entire organization (Joy vs Stress vs Neutral).
 
-2. **Emotion Grouping**
-   - Multiple fine-grained emotions merged into 6 core emotions
+---
 
-3. **Text Cleaning**
-   - Lowercasing
-   - Contraction expansion
-   - Regex cleaning
-   - Stopword handling
+## 🔐 Authentication & Security
+The system uses **Role-Based Access Control (RBAC)** powered by JWT.
+- **Roles**: `employee` and `hr`.
+- **Identity Provider**: Currently uses a mock user database for demonstration (extensible to OAuth or PostgreSQL).
 
-4. **Class Balancing**
-   - Neutral emotion downsampled
-   - Over-represented joy samples reduced
+---
 
-5. **Final Output**
-   - Balanced dataset saved as:
-     ```
-     data/goemotions_bal_removing_stopwords.csv
-     ```
+## ⚙️ How to Run (Local Development)
 
+### **Prerequisites**
+- Python 3.9+
+- Node.js 18+
+- Active virtual environment (`venv`)
 
-## 🧠 Model Architecture
-
-**Deep Learning Model Used:**
-
-- Embedding Layer (GloVe – 100d)
-- Bidirectional LSTM (128 units)
-- Custom Attention Layer
-- Fully Connected Dense Layers
-- Sigmoid activation (multi-label classification)
-
-### Why This Architecture?
-
-- BiLSTM captures context from both directions
-- Attention helps focus on emotionally relevant words
-- Sigmoid allows multi-emotion probability output
-
-
-## 🏋️ Model Training
-
-### Key Details
-
-- Optimizer: `Adam (1e-4)`
-- Loss: `Binary Crossentropy`
-- Epochs: `15`
-- Batch Size: `64`
-- Early Stopping & Model Checkpoint used
-
-### Saved Artifacts
-
-- `best_emotion_model.keras`
-- `best_emotion_model.h5`
-- `tokenizer.pkl`
-- `config.json`
-
-
-## 🚀 Applied Use Case: Wellbeing Monitoring
-
-### Employee Side
-- Daily emotional check-in
-- Emotion probabilities returned
-- Supportive conversational feedback
-- Optional wellbeing suggestions
-
-### Organization Side
-- Average wellbeing score
-- Overall organizational status
-- Number of employees tracked
-- Privacy-preserving aggregation (no raw text shown)
-
-
-## 🖥️ Backend & UI
-
-- **Backend**: FastAPI
-- **Storage**: JSON-based persistence
-- **Employee UI**: Streamlit chat interface
-- **Organization UI**: Streamlit dashboard
-
-
-## ⚖️ Ethical Considerations
-
-- No raw employee text exposed to organization
-- Only aggregated wellbeing metrics shown
-- Designed for **support**, not surveillance
-- Model outputs treated as **signals**, not diagnoses
-
-
-## 🛠️ How to Run (Local)
-
-### Backend
+### 1. Start the Backend
 ```bash
-uvicorn backend.app:app --reload
+# Set PYTHONPATH to include backend service directory
+$env:PYTHONPATH="backend" 
+.\venv\Scripts\uvicorn.exe backend.app:app --reload
 ```
 
-Employee App
+### 2. Start the Frontend
 ```bash
-streamlit run backend/streamlit_employee.py
+cd frontend
+npm install # Only required once
+npm run dev
 ```
 
-Organization Dashboard
+### 3. (Optional) Generate Demo Data
+Populate the system with realistic, model-generated historical logs:
 ```bash
-streamlit run backend/streamlit_org.py
+python backend/generate_demo_data_from_model.py
 ```
 
-📌 Key Takeaways
-- Built a deep learning NLP model from scratch
-- Applied real ML concepts, not just APIs
-- Designed a full ML → Product pipeline
-- Focused on interpretability, ethics, and usability
+---
 
-## 🚀 Future Enhancements
+## ⚖️ Ethical AI & Privacy
+- **Anonymization**: Individual feedbacks are processed for trends; raw text inputs are strictly confidential.
+- **Bias Mitigation**: Balanced GoEmotions labels (6 core categories) for reliable classification.
+- **Supportive Focus**: The tool is designed for resource allocation and support, not for employee surveillance.
 
-- Integrate a real database (PostgreSQL / MongoDB) instead of JSON storage for scalability
+---
 
-- Add secure authentication & role-based access (Employee vs Organization)
-
-- Build a production-grade frontend using React / Next.js for better UX
-
-- Introduce time-series trend modeling for long-term wellbeing prediction
-
-- Enhance the LLM layer with fine-tuned prompts per industry/domain
-
-- Add explainability dashboards for organizations (emotion trends, signals)
-
-- Implement privacy-preserving analytics (aggregation, anonymization)
-
-- Support multilingual emotion analysis
-
-- Enable real-time notifications for critical wellbeing trends
-
-- Deploy using Docker + CI/CD pipeline on cloud (AWS/GCP/Azure)
+## 🔮 Roadmap & Future Enhancements
+- [ ] **Scalable Data Layer**: Migration from JSON storage to PostgreSQL/MongoDB.
+- [ ] **Advanced Forecasting**: Time-series modeling to predict burnout *before* it occurs.
+- [ ] **Multilingual Support**: Expanding sentiment analysis to non-English languages.
+- [ ] **Containerization**: Full Docker support for seamless cloud deployment.
 
 
 

@@ -3,10 +3,14 @@
 import json
 import os
 from typing import List, Dict
+from pathlib import Path
 
+# Fix: Use an absolute path to ensure consistency regardless of CWD
+BASE_DIR = Path(__file__).resolve().parent.parent # backend/
+DEFAULT_PATH = str(BASE_DIR / "data" / "emotion_logs.json")
 
 class JsonStore:
-    def __init__(self, file_path: str = "data/emotion_logs.json"):
+    def __init__(self, file_path: str = DEFAULT_PATH):
         self.file_path = file_path
         os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
 
